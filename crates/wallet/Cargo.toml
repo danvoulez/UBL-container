@@ -1,0 +1,15 @@
+[package]
+name = "wallet"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Passkey 2-eyes vault for Permit issuance"
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ubl-kernel = { path = "../ubl-kernel" }
