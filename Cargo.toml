@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ubl-kernel",
+    "crates/ledger-engine",
+    "crates/membrana",
+    "crates/wallet",
+    "crates/policy-engine",
+    "crates/runner",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["UBL Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/danvoulez/UBL-container"
+
+[workspace.dependencies]
+# Core dependencies from TASKLIST.md
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1.5"
+ed25519-dalek = { version = "2.1", default-features = false, features = ["std"] }
+axum = "0.7"
+tokio = { version = "1.35", features = ["full"] }
+moka = { version = "0.12", features = ["future"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "sqlite"], default-features = false }
+wasmtime = "16.0"
+
+# Testing
+quickcheck = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,15 @@
+[package]
+name = "runner"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Isolated job execution with Receipt generation"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ubl-kernel = { path = "../ubl-kernel" }
+ledger-engine = { path = "../ledger-engine" }

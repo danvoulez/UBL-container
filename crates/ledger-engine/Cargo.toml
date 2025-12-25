@@ -1,0 +1,15 @@
+[package]
+name = "ledger-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Immutable append-only ledger with Merkle-root anchoring"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+ubl-kernel = { path = "../ubl-kernel" }

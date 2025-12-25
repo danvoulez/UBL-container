@@ -1,0 +1,17 @@
+[package]
+name = "membrana"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Sub-millisecond ALLOW/DENY decision service"
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+moka.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ubl-kernel = { path = "../ubl-kernel" }
+ledger-engine = { path = "../ledger-engine" }
