@@ -185,11 +185,11 @@ async fn verify_handler(
     let hash = blake3_hash(EventDomain::Decision, &body);
     let hash_vec = hash.to_vec();
 
-    // Check replay cache
-    if let Some(cached_decision) = state.replay_cache.get(&hash_vec).await {
+    // Check replay cache - if found, it's a duplicate (replay attack)
+    if state.replay_cache.get(&hash_vec).await.is_some() {
         let latency = start.elapsed();
         return Ok(Json(VerifyResponse {
-            decision: cached_decision,
+            decision: Decision::DenyDuplicate,
             hash: hex::encode(hash),
             latency_us: latency.as_micros() as u64,
         }));
@@ -205,13 +205,16 @@ async fn verify_handler(
     // Emit decision to ledger (async, best-effort)
     let ledger = state.ledger.clone();
     let aggregate_id = state.aggregate_id.clone();
+    let decision_str = format!("{:?}", decision).to_uppercase();
     tokio::spawn(async move {
+        // Note: For production, ledger appends should use a proper queue or transaction log
+        // to handle concurrent requests and avoid sequence conflicts
         if let Ok(events) = ledger.get_events(&aggregate_id).await {
             let sequence = events.len() as i64;
             let previous_hash = events.last().map(|e| e.event_hash.clone());
 
             let decision_data = serde_json::json!({
-                "decision": "ALLOW",
+                "decision": decision_str,
                 "hash": hex::encode(hash),
                 "timestamp": chrono::Utc::now().timestamp(),
             });
@@ -300,20 +303,20 @@ mod tests {
         let test_data = b"replay test";
         let bytes = Bytes::from_static(test_data);
 
-        // First request
+        // First request - should ALLOW
         let result1 = verify_handler(State(service.state.clone()), bytes.clone()).await;
         assert!(result1.is_ok());
+        let response1 = result1.unwrap().0;
+        assert_eq!(response1.decision, Decision::Allow);
 
-        // Second request (should hit cache)
+        // Second request with same data - should DENY_DUPLICATE (replay detected)
         let result2 = verify_handler(State(service.state.clone()), bytes).await;
         assert!(result2.is_ok());
-
-        let response1 = result1.unwrap().0;
         let response2 = result2.unwrap().0;
+        assert_eq!(response2.decision, Decision::DenyDuplicate);
 
-        // Same hash should be returned
+        // Same hash should be returned for both
         assert_eq!(response1.hash, response2.hash);
-        assert_eq!(response1.decision, response2.decision);
     }
 
     #[tokio::test]
