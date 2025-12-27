@@ -208,6 +208,8 @@ impl PolicyEngine {
         }
 
         // Simple evaluation: check first matching rule
+        // Note: Currently all rules with empty conditions match
+        // TODO: Implement proper condition evaluation when TDLN parser is added
         for rule in &policy.rules {
             if self.evaluate_conditions(&rule.conditions, context) {
                 return Ok(rule.effect);
@@ -219,21 +221,30 @@ impl PolicyEngine {
     }
 
     /// Evaluate policy conditions (simplified)
+    /// 
+    /// NOTE: Current implementation is simplified:
+    /// - Empty conditions always match (allow-all/deny-all patterns)
+    /// - Non-empty conditions are not yet implemented
+    /// - Will be extended when TDLN DSL parser is added
     fn evaluate_conditions(&self, conditions: &[String], _context: &serde_json::Value) -> bool {
-        // Empty conditions always match
+        // Empty conditions always match (for allow-all/deny-all policies)
         if conditions.is_empty() {
             return true;
         }
 
-        // Simplified condition evaluation
-        // In a full implementation, this would parse and evaluate expressions
-        true
+        // TODO: Implement condition parsing and evaluation
+        // For now, conditions are not supported - return false to be safe
+        false
     }
 
     /// Compile policy to WASM module
     ///
     /// This creates a simple WASM module that represents the policy logic.
     /// In a full implementation, this would compile TDLN to WASM.
+    /// 
+    /// NOTE: Current implementation only supports single-rule policies
+    /// with empty conditions (allow-all/deny-all patterns).
+    /// Multi-rule policies will use the first rule only.
     pub fn compile_to_wasm(&self, policy: &Policy) -> Result<Vec<u8>> {
         use wasm_encoder::*;
 
@@ -262,16 +273,18 @@ impl PolicyEngine {
         exports.export("evaluate", ExportKind::Func, 0);
 
         // Code section - function body
+        // NOTE: Simplified implementation - only uses first rule
+        // TODO: Compile all rules when TDLN parser is added
         let mut function_body = wasm_encoder::Function::new(vec![]);
         
-        // Determine decision based on first rule
-        let decision = if !policy.rules.is_empty() {
+        // Determine decision based on first rule with empty conditions
+        let decision = if !policy.rules.is_empty() && policy.rules[0].conditions.is_empty() {
             match policy.rules[0].effect {
                 PolicyDecision::Allow => 1,
                 PolicyDecision::Deny => 0,
             }
         } else {
-            0 // Deny by default
+            0 // Deny by default for policies with conditions or no rules
         };
 
         function_body.instruction(&Instruction::I32Const(decision));
@@ -304,19 +317,15 @@ impl PolicyEngine {
             .get_typed_func::<(), i32>(&mut store, "evaluate")
             .map_err(|e| Error::Execution(e.to_string()))?;
         
+        // Execute with fuel limit - errors are caught here
         let result = evaluate.call(&mut store, ()).map_err(|e| {
-            if e.to_string().contains("fuel") {
+            // Fuel exhaustion is caught here during execution
+            if e.to_string().contains("fuel") || e.to_string().contains("out of fuel") {
                 Error::FuelExhausted
             } else {
                 Error::Execution(e.to_string())
             }
         })?;
-
-        // Check remaining fuel
-        let remaining = store.get_fuel().unwrap_or(0);
-        if remaining == 0 {
-            return Err(Error::FuelExhausted);
-        }
 
         Ok(match result {
             1 => PolicyDecision::Allow,
