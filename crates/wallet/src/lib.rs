@@ -216,6 +216,18 @@ async fn health_handler() -> impl IntoResponse {
     }))
 }
 
+/// Build permit data structure for signing/verification
+fn build_permit_data(permit: &Permit) -> serde_json::Value {
+    serde_json::json!({
+        "jti": permit.jti,
+        "sub": permit.sub,
+        "iss": permit.iss,
+        "iat": permit.iat,
+        "exp": permit.exp,
+        "scope": permit.scope,
+    })
+}
+
 /// Create a new permit
 async fn create_permit_handler(
     State(state): State<AppState>,
@@ -233,18 +245,6 @@ async fn create_permit_handler(
     let jti = uuid::Uuid::new_v4().to_string();
 
     // Create permit structure (without signature)
-    let permit_data = serde_json::json!({
-        "jti": jti,
-        "sub": request.subject,
-        "iss": "ubl-wallet",
-        "iat": now,
-        "exp": exp,
-        "scope": request.scope,
-    });
-
-    let payload = serde_json::to_vec(&permit_data).map_err(Error::from)?;
-    let signature = ed25519_sign(&state.signing_key, &payload);
-
     let permit = Permit {
         jti: jti.clone(),
         sub: request.subject,
@@ -252,7 +252,18 @@ async fn create_permit_handler(
         iat: now,
         exp,
         scope: request.scope,
+        signature: vec![], // Temporary, will be replaced
+    };
+
+    // Build data and sign
+    let permit_data = build_permit_data(&permit);
+    let payload = serde_json::to_vec(&permit_data).map_err(Error::from)?;
+    let signature = ed25519_sign(&state.signing_key, &payload);
+
+    // Update permit with signature
+    let permit = Permit {
         signature,
+        ..permit
     };
 
     Ok(Json(CreatePermitResponse {
@@ -312,16 +323,8 @@ pub(crate) async fn verify_permit(
         return Err(Error::PermitRevoked);
     }
 
-    // Verify signature
-    let permit_data = serde_json::json!({
-        "jti": permit.jti,
-        "sub": permit.sub,
-        "iss": permit.iss,
-        "iat": permit.iat,
-        "exp": permit.exp,
-        "scope": permit.scope,
-    });
-
+    // Verify signature using the same data structure
+    let permit_data = build_permit_data(permit);
     let payload = serde_json::to_vec(&permit_data).map_err(Error::from)?;
     
     match ed25519_verify(&state.verifying_key, &payload, &permit.signature) {
